@@ -74,14 +74,33 @@ def load_splat_ply(path: str | Path, device: str = "cuda") -> GaussianParams:
 
     # 17 floats per vertex, little-endian.
     data = np.frombuffer(body, dtype="<f4").reshape(n, 17)
-
-    xyz = data[:, 0:3]
-    # 3:6 are normals — unused by 3DGS, discard.
-    f_dc = data[:, 6:9]
-    opacity = data[:, 9:10]
-    scales = data[:, 10:13]
-    rot = data[:, 13:17]
-
+    # [PATCHED_Y_FLIP_AND_LOG_SCALE]
+    # copy() so we have writable arrays (original buffer is read-only).
+    xyz = data[:, 0:3].astype(np.float32).copy()
+    # Init pipeline stores Y-up (Three.js). gsplat uses Y-down (OpenCV).
+    # Un-flip Y so the render comes out right-side up.
+    xyz[:, 1] *= -1.0
+    f_dc = data[:, 6:9].astype(np.float32).copy()
+    opacity = data[:, 9:10].astype(np.float32).copy()
+    scales = data[:, 10:13].astype(np.float32).copy()
+    rot = data[:, 13:17].astype(np.float32).copy()
+    # Our init .ply stores raw world-space scales; gsplat expects log-scales.
+    # If all stored scales are positive, convert. If already log (any negative),
+    # leave alone.
+    if scales.min() > 0:
+        scales = np.log(np.maximum(scales, 1e-6)).astype(np.float32)
+    # [PATCHED_DEPTH_PROPORTIONAL_SCALE]
+    # If scales are uniform (the init pipeline wrote a constant), give each
+    # Gaussian a size proportional to its depth so far/near splats render at
+    # similar pixel sizes. Target ~1.5 pixel radius at fx=1229.
+    if float(scales.std()) < 1e-3:
+        depth = np.maximum(xyz[:, 2:3], 0.1)  # (N, 1)
+        target_pixel_radius = 1.5
+        # World-space scale that projects to target_pixel_radius at this depth.
+        # Use fx=1229 as a prior; gsplat will adjust in optimization anyway.
+        per_point_scale = target_pixel_radius * depth / 1229.0
+        per_point_log_scale = np.log(np.maximum(per_point_scale, 1e-6)).astype(np.float32)
+        scales = np.broadcast_to(per_point_log_scale, (xyz.shape[0], 3)).copy()
     return _to_params(xyz, f_dc, opacity, scales, rot, device=device)
 
 
