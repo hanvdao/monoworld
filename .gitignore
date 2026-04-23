@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.DS_Store
+data/outputs/*
+!data/outputs/.gitkeep
+data/inputs/*
+!data/inputs/.gitkeep
+*.ply
+*.glb
+node_modules/
+dist/
+.cache/
+.ipynb_checkpoints/

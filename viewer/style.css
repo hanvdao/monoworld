@@ -1,0 +1,231 @@
+/* MonoWorld viewer styles. Dark, minimal, no framework. */
+
+:root {
+  --bg: #0e1116;
+  --panel: rgba(20, 24, 32, 0.92);
+  --panel-border: rgba(255, 255, 255, 0.08);
+  --text: #e6e8eb;
+  --muted: #9aa3ad;
+  --accent: #4da3ff;
+  --accent-hover: #6db4ff;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
+  font-size: 13px;
+}
+
+#canvas-container {
+  position: absolute;
+  inset: 0;
+}
+
+#canvas-container canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* HUD ---------------------------------------------------------- */
+#hud {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 200;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  min-width: 280px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  user-select: none;
+}
+
+.hud-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.hud-row label {
+  color: var(--muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.hud-help {
+  font-size: 11px;
+  color: var(--muted);
+  border-top: 1px solid var(--panel-border);
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+#stats-row span {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 12px;
+  margin-right: 12px;
+}
+
+select, button, input[type="range"] {
+  background: #1a1f28;
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button {
+  transition: background 0.15s, border-color 0.15s;
+}
+
+button:hover {
+  background: #232a36;
+  border-color: var(--accent);
+}
+
+select {
+  flex: 1;
+  cursor: pointer;
+}
+
+input[type="range"] {
+  flex: 1;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* Segmented control for mode toggle ------------------------- */
+.seg {
+  display: flex;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--panel-border);
+}
+
+.seg-btn {
+  border: none;
+  border-radius: 0;
+  padding: 4px 12px;
+  background: #1a1f28;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.seg-btn:hover {
+  background: #232a36;
+  color: var(--text);
+}
+
+.seg-btn.active {
+  background: var(--accent);
+  color: #0e1116;
+  font-weight: 600;
+}
+
+.hud-row label input[type="checkbox"] {
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+/* Per-layer toggle row -------------------------------------- */
+#layer-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.layer-cb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.layer-cb .swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Lock overlay -------------------------------------------------- */
+#lock-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+#lock-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.overlay-card {
+  text-align: center;
+  padding: 32px 48px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+}
+
+.overlay-card h1 {
+  margin: 0 0 8px;
+  font-weight: 600;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+}
+
+.overlay-card p {
+  margin: 4px 0;
+  color: var(--muted);
+}
+
+.overlay-card .hint {
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* Loading ------------------------------------------------------- */
+#loading {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  z-index: 50;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--muted);
+  display: none;
+}
+
+#loading.visible { display: block; }

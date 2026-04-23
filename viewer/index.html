@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MonoWorld Viewer</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div id="hud">
+    <div class="hud-row">
+      <label for="scene-select">Scene:</label>
+      <select id="scene-select"></select>
+      <button id="reload-scenes" title="Reload scene index">⟳</button>
+    </div>
+    <div class="hud-row">
+      <label>Mode:</label>
+      <div class="seg">
+        <button id="mode-mesh" class="seg-btn">Mesh</button>
+        <button id="mode-splats" class="seg-btn">Splats</button>
+        <button id="mode-points" class="seg-btn">Points</button>
+      </div>
+    </div>
+    <div class="hud-row" id="point-size-row">
+      <label for="point-size">Point size: <span id="point-size-val">0.020</span></label>
+      <input type="range" id="point-size" min="0.005" max="0.10" step="0.005" value="0.02" />
+    </div>
+    <div class="hud-row">
+      <label><input type="checkbox" id="wireframe" /> Wireframe</label>
+      <label><input type="checkbox" id="double-side" checked /> DoubleSide</label>
+    </div>
+    <div class="hud-row" id="layer-toggles" style="display:none;">
+      <label>Layers:</label>
+      <div id="layer-checkboxes"></div>
+    </div>
+    <div class="hud-row">
+      <button id="reset-cam">Reset camera</button>
+      <button id="toggle-axes">Toggle axes</button>
+    </div>
+    <div class="hud-row" id="stats-row">
+      <span>FPS: <span id="fps">--</span></span>
+      <span id="primitive-count">Tris: --</span>
+    </div>
+    <div class="hud-row hud-help">
+      WASD = move &nbsp; · &nbsp; Mouse = look &nbsp; · &nbsp; Space = up &nbsp; · &nbsp; Shift = boost &nbsp; · &nbsp; Esc = release
+    </div>
+  </div>
+
+  <div id="lock-overlay">
+    <div class="overlay-card">
+      <h1>MonoWorld</h1>
+      <p>Click to navigate</p>
+      <p class="hint">WASD to move &nbsp;·&nbsp; mouse to look &nbsp;·&nbsp; Esc to release</p>
+    </div>
+  </div>
+
+  <div id="loading">Loading scene…</div>
+
+  <script type="module" src="/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+# MonoWorld default configuration.
+
+depth:
+  # "midas_dpt_large" or "depth_anything_v2" (requires pip install transformers)
+  model: "depth_anything_v2"
+  device: "auto"
+  near: 0.5
+  far: 20.0
+
+camera:
+  # If intrinsics aren't provided, we synthesize them from a horizontal FOV.
+  fov_deg: 55.0
+
+pointcloud:
+  # Drop points whose normalized depth is outside this range (sanitation).
+  min_depth: 0.1
+  max_depth: 50.0
+  # Subsample stride for a lighter point cloud. 1 = every pixel.
+  stride: 1
+
+mesh:
+  # Target triangle count (drives auto-stride). 200k renders smoothly in browsers.
+  target_triangles: 200000
+  # Drop triangles whose longest edge > factor * median_edge. 3.0 is a good
+  # default; lower (e.g. 2.0) is more aggressive and removes more silhouette
+  # streaks at the cost of also clipping some legitimate slanted surfaces.
+  edge_threshold_factor: 3.0
+  min_depth: 0.1
+  max_depth: 50.0
+
+layers:
+  # Phase 4: split the scene into discrete depth layers for per-layer meshing
+  # and (Phase 5) inpainting of disocclusion regions.
+  enabled: true
+  num_layers: 3              # foreground / midground / background
+  method: "quantile"         # "quantile" | "kmeans"
+
+inpainting:
+  # Phase 5: fill disoccluded regions behind foreground objects.
+  enabled: true
+  # "opencv" = fast/instant, works everywhere, moderate quality.
+  # "diffusion" = Stable Diffusion 1.5 Inpaint via diffusers (high quality,
+  #               requires diffusers+transformers, ~4GB VRAM or slow on CPU).
+  backend: "opencv"
+  # Dilation radius in pixels — how far the inpaint mask extends beyond
+  # the foreground silhouette. Larger = more aggressive fill.
+  dilation_px: 15
+  # Text prompt for diffusion backend (ignored by opencv).
+  prompt: "photorealistic background, high quality, detailed"
+  device: "auto"
+
+splat:
+  # Gaussian Splatting export settings.
+  stride: 2                  # pixel stride (2 = 1/4 of pixels, good balance)
+  opacity: 0.9               # initial per-Gaussian opacity
+
+output:
+  root: "data/outputs"
+  save_depth_vis: true
+  save_pointcloud: true
+  save_mesh: true
+  save_splat: true
+  save_layers: true
+  save_metadata: true

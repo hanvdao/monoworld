@@ -1,0 +1,26 @@
+# Core
+numpy>=1.24,<2.1
+Pillow>=10.0
+opencv-python>=4.8
+PyYAML>=6.0
+tqdm>=4.66
+
+# ML
+torch>=2.1
+torchvision>=0.16
+timm>=0.9.12           # required by MiDaS DPT backbones
+transformers>=4.40     # Depth Anything V2
+scipy>=1.11            # kNN scale estimation for splat init
+
+# 3D / geometry
+open3d>=0.18
+trimesh>=4.0           # glTF export (Phase 3+)
+
+# Optimization (Path A) — CUDA-only for gsplat
+# pip install gsplat          # ONLY on cloud GPU (CUDA required)
+lpips>=0.1.4             # optional perceptual loss
+matplotlib>=3.7          # plot_curves.py
+
+# Dev
+pytest>=7.4
+
