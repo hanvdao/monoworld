@@ -22,18 +22,15 @@ By the end of the quarter I will demo a system that takes a single RGB photograp
 - A 2-minute demo video demonstrating navigation across multiple scenes and modes.
 
 **Design constraints**
-- **Human time** is the primary constraint: one person, five weeks. This forces heavy reliance on pretrained models rather than training from scratch.
 - **Consumer hardware** (Apple M-series Mac) is the target development platform. GPU memory limits forced the fallback from SDXL to SD 1.5 to OpenCV for inpainting; a stretch goal is to use cloud GPU credits to test higher-quality inpainters.
-- **The output must be a real-time interactive demo**, not offline renders. This rules out NeRF, which is competitive only with significant per-scene training time.
+- **The output must be a real-time interactive demo** not offline renders. This rules out NeRF, which is competitive only with significant per-scene training time.
 
 ## Task List
 
-Below, tasks marked ✅ are already complete as of the proposal deadline. I front-loaded the baseline work because the course guidelines explicitly recommend having an end-to-end pipeline running in the first week, and because the ML stack (depth/segmentation/inpainting) is known to have dependency issues that are better discovered early.
-
 ### Nice-to-haves (if ahead of schedule)
 
-- **Cloud-GPU-backed Flux Fill inpainting** for 1–2 showcase scenes. Flux Fill is the current state of the art for image inpainting (released Nov 2024 by Black Forest Labs) and would dramatically raise the quality ceiling on the disocclusion fill. Requires ~16 GB VRAM, so would be run on a rented A10G or A100 for ~$2–3 total.
-- **3DGS optimization pass.** Currently the splats are directly initialized from the depth-unprojected point cloud with no training. Running ~200 iterations of differentiable gradient descent against the source view (using `gsplat`) would sharpen them significantly. Would require a GPU but minimal training time.
+- **Cloud-GPU-backed Flux Fill inpainting** for 1–2 showcase scenes. Flux Fill is the current state of the art for image inpainting (released Nov 2024 by Black Forest Labs) and would dramatically raise the quality ceiling on the disocclusion fill. Requires ~16 GB VRAM.
+- **3DGS optimization pass.** Currently the splats are directly initialized from the depth-unprojected point cloud with no training. Running ~200 iterations of differentiable gradient descent against the source view would sharpen them significantly. Would require a GPU but minimal training time.
 
 ## Expected Deliverables and Evaluation
 
@@ -53,10 +50,7 @@ The evaluation framing follows the course's recommended "falsifiable hypothesis"
 ## Risks and Mitigation
 
 1. **GPU memory for diffusion inpainting.** Already bitten: SDXL and SD 1.5 both OOM'd at 1280×720 on my Mac. *Mitigated* by (a) fallback to OpenCV Telea (works everywhere), (b) resize-to-512 patch for the SD backend, (c) stretch-goal cloud GPU for the Flux upgrade.
-2. **Library stability.** The first Gaussian Splat renderer I tried (`@mkkellogg/gaussian-splats-3d`) silently failed to load through Vite. *Mitigated* by writing my own shader-based renderer from scratch — now zero third-party 3DGS dependencies.
-3. **Single-image 3D reconstruction is fundamentally bounded.** No amount of better inpainting makes it look like WorldLabs. *Mitigated by honest framing:* the project is explicitly about characterizing the ceiling of the depth-based approach, not claiming to match multi-view diffusion systems.
-4. **Evaluation scope creep.** FID with n=20 is noisy; user study logistics are heavy for a solo project. *Mitigated* by treating qualitative comparison as primary and metrics as supporting — the course guidelines explicitly accept this.
-5. **Demo video recording + editing time.** This historically eats a day. *Mitigated* by recording early (week 4) with whatever scenes exist, then re-recording only if final scenes significantly differ.
+3. **Single-image 3D reconstruction is fundamentally bounded.**  The project is explicitly about characterizing the ceiling of the depth-based approach not claiming to match multi-view diffusion systems.
 
 ## What I Need Help With
 
@@ -65,4 +59,3 @@ The evaluation framing follows the course's recommended "falsifiable hypothesis"
 - **Paper references for the related-work section**, specifically:
   - The canonical single-image-to-3D-scene paper that my approach is most similar to (I have in mind Shih et al. 2020 "3D Photography Using Context-aware Layered Depth Inpainting" but would welcome corrections).
   - A recent 3DGS-from-single-image paper to cite (LucidDreamer? ReconFusion?).
-- **Guidance on cloud GPU spend.** I have ~$30 I can spend. Is it worth it for Flux Fill on 2 scenes, or better spent on an A100 hour for SDXL on all 5 scenes?
