@@ -1,4 +1,4 @@
-# MonoWorld: Monocular Image-to-Navigable 3D Scene Generation via Depth-Guided Layered Reconstruction
+**Depth-Initialized Differentiable Gaussian Splatting from a Single Image**
 
 **Han Dao** (`handao@stanford.edu`)
 
@@ -6,56 +6,70 @@
 
 ## Summary
 
-By the end of the quarter I will demo a system that takes a single RGB photograph as input and produces a navigable 3D scene rendered in a web browser, complete with WASD + mouse-look controls. The system will be evaluated across 3–5 diverse scenes (indoor, outdoor, close-up, wide-angle, stylized) by producing a side-by-side comparison of three render modes — colored point cloud, textured mesh with edge culling, and Gaussian splats — each built from the same depth-unprojected pipeline. The goal is to characterize the quality, runtime, and failure modes of each representation for the single-image-to-3D problem, both qualitatively (rendered stills + demo video) and quantitatively (PSNR / LPIPS at the origin view, FID under small novel-view offsets, and per-stage runtime). The approach combines a pretrained monocular depth estimator (Depth Anything V2), heuristic depth-based layering, OpenCV- and diffusion-based inpainting of disoccluded regions, and a custom GLSL shader for Gaussian splat rendering.
+The project asks: **how much does a good geometric prior buy you in the optimization of an explicit differentiable scene representation?** It answers this by building a single-image 3D scene reconstruction system that uses monocular depth estimation to produce a structured initialization for differentiable 3D Gaussian Splatting optimization. The system unprojects a single RGB photograph through a pinhole model using depth predictions, then converts the resulting colored points into a standard 3DGS `.ply` with depth-proportional scales (so each Gaussian projects to a consistent screen-space footprint regardless of its depth) and spherical-harmonic DC color coefficients. This scene then feeds a differentiable rasterizer, which runs Adam optimization over positions, log-scales, unit quaternions, opacity logits, and SH coefficients against a photometric loss. The system is implemented as a two-stage pipeline — a pretrained-model-driven initialization front-end, and a custom optimization loop with full systems instrumentation (per-iteration gradient norms, Gaussian counts, wall-clock timing) — so the contribution of the geometric prior can be isolated and measured quantitatively. The experimental comparison is initialized-depth-3DGS vs. [standard random-point-init 3DGS (Kerbl et al. 2023)](https://arxiv.org/abs/2308.04079) on 5 scenes.
 
 ## Inputs and Outputs
 
 **Inputs**
-- A single RGB image (JPEG or PNG), typically 512×512 to 1280×720.
-- An optional text prompt used to condition the diffusion-based inpainting stage (e.g., "sunny street, detailed, photorealistic").
-- Assumed camera intrinsics derived from image size and a default horizontal FOV of 55°.
+- A single RGB image (512×512 to 1024×1024).
+- Optimization config: iteration count, loss weights, densification schedule.
 
 **Outputs**
-- A Three.js-based browser viewer serving the generated scene at 60 FPS with real-time camera controls.
-- Three switchable render representations per scene: point cloud (`.ply`), textured layered mesh (`.glb`), Gaussian splats (`.ply` in 3DGS format).
-- Debug artifacts per scene: depth visualization, per-layer segmentation mask, per-layer inpainted textures, runtime metadata.
-- A 2-minute demo video demonstrating navigation across multiple scenes and modes.
+- A trained 3DGS scene (`.ply`, standard 3DGS format).
+- Convergence curves: PSNR / LPIPS vs iteration, both initialization strategies.
+- Interactive browser viewer showing initialized vs optimized splats side-by-side.
+- Per-stage runtime + memory profile of the optimization loop.
+- Failure-case catalog with root-cause analysis.
 
 **Design constraints**
-- **Consumer hardware** (Apple M-series Mac) is the target development platform. GPU memory limits forced the fallback from SDXL to SD 1.5 to OpenCV for inpainting; a stretch goal is to use cloud GPU credits to test higher-quality inpainters.
-- **The output must be a real-time interactive demo** not offline renders. This rules out NeRF, which is competitive only with significant per-scene training time.
+- **Hardware:** might be CUDA-only, so optimization experiments run on a rented RunPod A10G 
 
 ## Task List
+1. Reproducible end-to-end pipeline (`python run.py --image <path>`).
+2. Depth estimation via Depth Anything V2 (primary) and MiDaS (fallback), config-selectable.
+3. Unprojection to colored point cloud with synthesized pinhole intrinsics from a default 55° horizontal FOV.
+4. Point cloud → 3DGS-format `.ply` with isotropic scales from local kNN density, SH DC coefficients, and sigmoid-logit opacities
+5. Mesh baseline with edge-length culling --> which is the "naive depth-based reconstruction" the optimization has to beat.
+6. Depth layering + per-layer inpainting for comparison context.
+7. Browser viewer with a custom GLSL splat shader 
+8. 25 unit tests across geometry, meshing, layering, inpainting, splat generation.
+9. Differentiable rasterizer setup. 
+10. Wrap the existing `.ply` splat generator as the initialization for the differentiable rasterizer.
+11. Implement the optimization loop. 
+13. Implement "random init" baseline from the 3DGS paper
+14. Run the headline experiment on 5 scenes. For each scene, train both initializations for 2000 iterations
+17. Systems analysis: profile the optimization loop. Forward rasterize vs backward vs densify vs loss. Produce a per-stage wall-clock breakdown.
+18. Wire optimization output into the browser viewer so the demo toggles "initialized splats" ↔ "after N iterations" ↔ "fully optimized."
+19. Record demo video showing the init → optimized progression + convergence curves.
+20. Write report.
 
 ### Nice-to-haves (if ahead of schedule)
 
-- **Cloud-GPU-backed Flux Fill inpainting** for 1–2 showcase scenes. Flux Fill is the current state of the art for image inpainting (released Nov 2024 by Black Forest Labs) and would dramatically raise the quality ceiling on the disocclusion fill. Requires ~16 GB VRAM.
-- **3DGS optimization pass.** Currently the splats are directly initialized from the depth-unprojected point cloud with no training. Running ~200 iterations of differentiable gradient descent against the source view would sharpen them significantly. Would require a GPU but minimal training time.
+- Compare three init strategies in one plot: random, my depth-init, and a NeRF-style small-MLP-predicts-density warm-start. 
+- Ship the custom PyTorch-MPS rasterizer. If I can get my own simplified rasterizer working well enough to produce the headline result on Mac without renting GPU, that becomes an additional systems contribution.
 
 ## Expected Deliverables and Evaluation
+### Primary: convergence curves
+- **Figure A (headline):** PSNR vs iteration, averaged over 5 scenes, two curves (depth-init vs random-init), shaded min/max envelope across scenes. 
+- **Figure B:** Same as A but with LPIPS (perceptual).
+- **Figure C:** Gradient-update magnitude vs iteration. 
+- **Figure D:** Ablation table — {depth-init, random-init} × {with depth-reg, without}. 
 
-The evaluation framing follows the course's recommended "falsifiable hypothesis" structure.
+### Supporting qualitative evaluation
+Three-column comparison per scene: **original mesh baseline** (Phase 3) | **depth-init splats, no optimization** | **optimized splats after 2000 iters**. 
 
-**Hypothesis.** For single-image 3D scene generation targeting interactive browser-based navigation, the choice of scene representation (point cloud vs textured mesh vs Gaussian splats) drives perceived visual quality more than any individual component upgrade (depth model, inpainter). In particular, Gaussian splats will score measurably better on novel-view FID than textured meshes with inpainted disocclusion regions, *even without per-scene optimization*, because of their soft alpha falloff at silhouette edges.
 
-**Primary evaluation: qualitative side-by-side comparison.** For each of 3–5 scenes, a figure containing three columns (Points / Mesh / Splats) × two rows (origin view / slightly-offset view). This directly demonstrates the representation trade-offs.
+## Risks
+1. **Single-image 3D reconstruction is fundamentally bounded.**  The project is explicitly about characterizing the ceiling of the depth-based approach not claiming to match multi-view diffusion systems.
 
-**Supporting quantitative metrics.**
-- Reprojection PSNR + LPIPS at the origin view, per mode. (Expect: all three ≥ 28 dB PSNR since textures come from the source; LPIPS will show the meaningful differences.)
-- FID of a small set (20) of novel-view renders against real reference photos. Small n, but directionally meaningful.
-- Per-stage runtime table (depth inference, mesh build, inpainting, splat generation, viewer FPS).
+2. **Densification is notoriously finicky.** If gradients explode or Gaussians collapse, the optimization diverges. Mitigation: start from the reference 3DGS schedule (densify every 100 iters, split if ||grad_position|| > τ, prune if opacity < α) and tune only if needed.
+3. **Cloud GPU budget overrun.** 
+4. **Single-image 3DGS may "overfit" trivially.** With only one training view, the model can memorize pixels while producing garbage geometry. 
 
-**What success looks like:** a demo video and figure set where the viewer can clearly distinguish the three modes, with Splats visibly outperforming Mesh on soft transitions and Mesh visibly outperforming Points on surface solidity. Graphs showing how each stage contributes to quality, and an honest analysis of failure cases (thin foreground objects, reflective surfaces, very close camera translations).
-
-## Risks and Mitigation
-
-1. **GPU memory for diffusion inpainting.** Already bitten: SDXL and SD 1.5 both OOM'd at 1280×720 on my Mac. *Mitigated* by (a) fallback to OpenCV Telea (works everywhere), (b) resize-to-512 patch for the SD backend, (c) stretch-goal cloud GPU for the Flux upgrade.
-3. **Single-image 3D reconstruction is fundamentally bounded.**  The project is explicitly about characterizing the ceiling of the depth-based approach not claiming to match multi-view diffusion systems.
 
 ## What I Need Help With
+-Is this project advanced/substantial enough for the term project? 
+- Is 6 scenes enough? Comparable papers use 8–20.
+- Am I missing a canonical single-image-3DGS citation?
 
-- **Advice on realistic FID evaluation with small n.** Is n=20 even publishable-grade, or should I drop FID entirely and just use PSNR+LPIPS+user-observed quality? Would appreciate a pointer to any novel-view eval protocol that's standard in the field.
-- **A sanity-check on the "falsifiable hypothesis" framing** above before I commit to it for the report. Is this the level of specificity you're looking for?
-- **Paper references for the related-work section**, specifically:
-  - The canonical single-image-to-3D-scene paper that my approach is most similar to (I have in mind Shih et al. 2020 "3D Photography Using Context-aware Layered Depth Inpainting" but would welcome corrections).
-  - A recent 3DGS-from-single-image paper to cite (LucidDreamer? ReconFusion?).
+
