@@ -1,3 +1,4 @@
+# cs348k-project
 **Depth-Initialized Differentiable Gaussian Splatting from a Single Image**
 
 **Han Dao** (`handao@stanford.edu`)
@@ -6,7 +7,7 @@
 
 ## Summary
 
-The project asks: **how much does a good geometric prior buy you in the optimization of an explicit differentiable scene representation?** It answers this by building a single-image 3D scene reconstruction system that uses monocular depth estimation to produce a structured initialization for differentiable 3D Gaussian Splatting optimization. The system unprojects a single RGB photograph through a pinhole model using depth predictions, then converts the resulting colored points into a standard 3DGS `.ply` with depth-proportional scales (so each Gaussian projects to a consistent screen-space footprint regardless of its depth) and spherical-harmonic DC color coefficients. This scene then feeds a differentiable rasterizer, which runs Adam optimization over positions, log-scales, unit quaternions, opacity logits, and SH coefficients against a photometric loss. The system is implemented as a two-stage pipeline — a pretrained-model-driven initialization front-end, and a custom optimization loop with full systems instrumentation (per-iteration gradient norms, Gaussian counts, wall-clock timing) — so the contribution of the geometric prior can be isolated and measured quantitatively. The experimental comparison is initialized-depth-3DGS vs. [standard random-point-init 3DGS (Kerbl et al. 2023)](https://arxiv.org/abs/2308.04079) on 5 scenes.
+The project asks **how much does a good geometric prior buy you in the optimization of an explicit differentiable scene representation?** I attempt to this by building a single-image 3D scene reconstruction system that uses monocular depth estimation to produce a structured initialization for differentiable 3D Gaussian Splatting optimization. The system unprojects a single RGB photograph through a pinhole model using depth predictions, then converts the resulting colored points into a standard 3DGS `.ply` with depth-proportional scales (so each Gaussian projects to a consistent screen-space footprint regardless of its depth) and spherical-harmonic DC color coefficients. This scene then feeds a differentiable rasterizer, which runs Adam optimization over positions, log-scales, unit quaternions, opacity logits, and SH coefficients against a photometric loss. The system is implemented as a two-stage pipeline — a pretrained-model-driven initialization front-end, and a custom optimization loop with full systems instrumentation (per-iteration gradient norms, Gaussian counts, wall-clock timing) — so the contribution of the geometric prior can be isolated and measured quantitatively. The experimental comparison is initialized-depth-3DGS vs. [standard random-point-init 3DGS (Kerbl et al. 2023)](https://arxiv.org/abs/2308.04079) on 5 scenes.
 
 ## Inputs and Outputs
 
@@ -73,3 +74,78 @@ Three-column comparison per scene: **original mesh baseline** (Phase 3) | **dept
 - Am I missing a canonical single-image-3DGS citation?
 
 
+-----
+# Checkpoint 1
+
+This checkpoint focuses on the requirement that "evaluation code is running" For DepthInit-3DGS, the random-init 3DGS configuration is the trivial baseline — it's the standard initialization from Kerbl et al. 2023, and it gives my proposed depth-init something to be measured against. The full evaluation pipeline is implemented and has produced its first set of figures.
+
+## What questions does the project aim to answer?
+The central question: **how much does a good geometric prior buy you in the optimization of an explicit differentiable scene representation?**
+
+The hypothesis structure: 
+- **H1 (convergence acceleration):** depth-based init reduces iterations to a target PSNR by ≥5×
+- **H2 (optimization trajectory):** depth-init produces smaller, more stable gradient updates
+- **H3 (negative prediction):** depth-regularization during optimization gives no extra benefit in single-view
+
+## What experiments answer the question?
+A controlled comparison on the same scenes between two initialization strategies, both fed into the same Adam optimization loop with identical hyperparameters and densification schedule. Success at the checkpoint = "the experiment runs end-to-end and produces a falsifiable plot." Success at final report = "the plot supports or refutes the hypothesis with a quantitative claim."
+
+## Status
+All evaluation infrastructure works. Six scenes × two initializations × 2000 iterations completed on a RunPod RTX 2000 Ada. Logging, plotting, and analysis all run.
+
+### H1: Convergence acceleration — **strongly supported**
+
+| Threshold | Depth-init reaches at | Random-init reaches at | Speedup |
+|---|---|---|---|
+| PSNR=20 dB | mean iter 26 | mean iter ~917 (3 of 6 scenes never reach) | **263×** |
+| PSNR=25 dB | mean iter ~80 | never reaches in 2000 iters | **∞** |
+| PSNR=28 dB | mean iter 192 | never reaches in 2000 iters | **∞** |
+
+At PSNR=20, depth-init reaches the threshold at iter 1 on 2 scenes, iter 50 on 3 scenes, and iter 300 on 1 scene. Random-init reaches PSNR=20 on only 3 of 6 scenes (at iter 250, 500, and 2000), and never reaches PSNR=25 on any scene. The headline plot shows random-init plateauing around PSNR=20 while depth-init climbs to PSNR=43+ by iter 2000.
+
+H1 was originally framed as ">=5× speedup on >=4 of 5 scenes." The actual result far exceeds this: random-init does not produce a usable scene at all in this single-view setting within the iteration budget, while depth-init does so almost immediately.
+
+### H2: Gradient-trajectory stability — **strongly supported**
+
+Depth-init gradient L2 norm on means stays near `7e-3` for the entire training, with low variance across scenes. Random-init starts comparable but climbs to `5e-2` (~10× higher) by iter 1000 and stays there. The interpretation: depth-init Gaussians enter optimization in a low-curvature region of the loss landscape and refine smoothly, while random-init Gaussians spend most of training thrashing as they search for plausible geometry from scratch.
+
+### H3: Depth-regularization during optimization — **not yet tested**
+
+Ablation pending. Will run with the existing pipeline (`python optimize.py --depth-reg`), no new compute infrastructure needed.
+
+## Where the code and results live
+
+| Component | Path |
+|---|---|
+| Optimization module | `monoworld/optimization/{rasterizer,losses,densify,train_loop}.py` |
+| Top-level entrypoint | `optimize.py` |
+| Convergence study runner | `scripts/run_convergence_study.py` |
+| Figure / table generator | `scripts/plot_curves.py` |
+| Diagnostic tool | `scripts/diagnose_splat.py` |
+| Headline figure | `data/outputs/figures/convergence_psnr.png` |
+| Gradient-trajectory figure | `data/outputs/figures/gradient_trajectory.png` |
+| Per-scene speedup table | `data/outputs/figures/iters_to_psnr_table.csv` |
+| Per-run training logs | `data/outputs/<scene>/optimization/<init>/log_<init>.jsonl` |
+| Optimized splat checkpoints | `data/outputs/<scene>/optimization/<init>/splat_<init>_final.ply` |
+
+The figures and table can be regenerated end-to-end from the JSONL logs without re-running any training:
+
+```bash
+python scripts/plot_curves.py --psnr-target 20.0   # 263x mean speedup
+python scripts/plot_curves.py --psnr-target 25.0   # depth-init reaches; random does not
+python scripts/plot_curves.py --psnr-target 28.0   # depth-init reaches; random does not
+```
+
+## Reproducing the headline experiment
+
+```bash
+# Init pipeline (CPU/MPS/CUDA all work for this stage).
+python run.py --image data/inputs/example.jpg
+
+# Optimization (CUDA required for gsplat — use cloud GPU).
+python optimize.py --scene data/outputs/<scene_id>/ --init depth   --iters 2000
+python optimize.py --scene data/outputs/<scene_id>/ --init random  --iters 2000
+
+# Plot.
+python scripts/plot_curves.py --psnr-target 20.0
+```
