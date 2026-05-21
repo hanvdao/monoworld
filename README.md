@@ -146,6 +146,139 @@ python run.py --image data/inputs/example.jpg
 python optimize.py --scene data/outputs/<scene_id>/ --init depth   --iters 2000
 python optimize.py --scene data/outputs/<scene_id>/ --init random  --iters 2000
 
+
+
+
 # Plot.
 python scripts/plot_curves.py --psnr-target 20.0
 ```
+
+
+# Checkpoint 2
+
+## 1. Solidified evaluation plan
+After checkpoint 1, I made two changes in response to what the
+data started showing:
+
+- **Reframed the "speedup" metric.** checkpoint 1 reported speedup as "iterations to
+  PSNR=20." That conflates two effects: depth-init being faster *per
+  iteration* (fewer Gaussians early on) and depth-init *reaching the
+  target at all* (random-init plateaus). I now report both an
+  iteration-count speedup and a wall-clock speedup at three PSNR
+  thresholds, with explicit "$\infty$ / never reached" entries instead of
+  silently dropping non-converging scenes.
+
+The final evaluation template, with status of each cell:
+| Section | Cell | Status |
+|---------|------|--------|
+| H1 | PSNR vs iter curve (mean ± min-max over 6 scenes) | **filled** |
+| H1 | Iters to PSNR={20, 25, 28} table | **filled** |
+| H1 | Per-scene speedup breakdown | **filled** |
+| H1 | Wall-clock time to PSNR={20, 25, 28} table | **filled**|
+| H2 | Gradient L2-norm trajectory plot | **filled** |
+| H3 | 2×2 ablation table (init × depth-reg) | **stubbed**; framework runs |
+| Qualitative | 3-scene grid (init / depth-opt / random-opt) | **filled** |
+| Qualitative | Off-axis oblique-view 3D-structure comparison | **filled** |
+| Systems | Wall-clock per init, per PSNR threshold | **filled** (from CP2 work) |
+| Systems | Per-stage timing breakdown | not started; needs re-instrumentation |
+| Systems | Memory vs Gaussian count | not started; needs re-instrumentation |
+| Failure cases | Three failure modes with one figure each | filled (Random-init iter progression captured) |
+
+## 2. What was filled in since checkpoint 1
+### H1 + H2 already complete at checkpoint 1
+Carried forward without change. Headline result is unchanged: 263×
+mean iteration speedup at PSNR=20, infinite speedup at PSNR=25/28.
+
+### Wall-clock systems profile (new since CP1)
+Built `scripts/profile.py` to aggregate the existing JSONL logs into a
+wall-clock table. The JSONL logs already had `wall_seconds`, so no
+rerun was needed.
+
+| Init | t→PSNR=20 | t→PSNR=25 | t→PSNR=28 | Total 2000 iters | Mean per iter |
+|------|-----------|-----------|-----------|------------------|---------------|
+| Depth-init | 3.2 s | 9.6 s | 14.5 s | 2.1 min | 63 ms |
+| Random-init | 1.5 min | 1.5 min (1 of 6 scenes) | never | 2.7 min | 82 ms |
+
+Two findings here that were not visible from iteration-count alone:
+
+- **Random-init does reach PSNR=25 on one scene** (test_4), which
+  contradicts the checkpoint 1 report's "never reaches PSNR=25 on any scene"
+  claim. The H1 table will be updated to "1 of 6" instead of "0 of 6"
+  for that row.
+
+- **Random-init is 30% slower per iteration** (82 vs 63 ms) despite
+  ending with *fewer* Gaussians (198k vs 448k). The reason: depth-init's
+  Gaussians settle quickly, so densification calls are cheap; random-init's
+  Gaussians keep oscillating, so the rasterizer pays for more
+  per-iteration overhead on Gaussians that get pruned in the next densify
+  pass.
+
+### Gaussian-count differential (new since checkpoint 1)
+Depth-init ends at 448k Gaussians (mean over 6 scenes; 895k on the most
+complex scene). Random-init plateaus at ~198k — essentially its initial
+count. This is downstream of the structural failure. with no real
+geometry, densification's clone/split rule has no high-gradient
+Gaussians to expand from.
+
+### Qualitative figures (new since checkpoint 1)
+I captured screenshots of three scenes through the integrated
+viewer (variant dropdown locked to same camera within a row): init,
+depth-init optimized, and random-init optimized. Plus the off-axis
+oblique-view figure showing depth-init preserving depth ordering vs
+random-init collapsing to a planar sheet.
+
+### Viewer integration
+The Three.js viewer now has a variant dropdown that toggles between
+{init, depth-opt, random-opt, intermediate checkpoints} without
+moving the camera. This is what made the qualitative figure capture
+practical — without it, getting matching camera poses across variants
+was hand-eye coordination at best.
+
+### Failure-case documentation
+Three failure modes identified and written up with a supporting figure
+for each:
+
+1. **Random-init degenerate convergence** — flat-poster solution
+   visible from any off-axis angle. Iter-500 / iter-1000 / iter-2000
+   checkpoints all look structurally identical.
+2. **Thin-structure dropout in depth-init** — overhead wires and
+   distant tree branches are smoothed by Depth Anything V2 and the
+   photometric loss cannot recover them.
+3. **Off-axis viewpoint degradation** — fundamental limit of
+   single-view reconstruction. Geometry in occluded regions is
+   guessed by the depth model and never verified against image data.
+
+### Report draft
+I have drafted the report with Abstract, Introduction,
+Methods, Evaluation (H1/H2/H3/qualitative/systems/failures),
+Discussion, Appendix. All figures referenced exist on disk except for
+the H3 table, which is stubbed for the ablation that has not yet been
+run.
+
+## 3. What's left to do
+### Fill in stubbed evaluation cells
+
+- **H3 ablation.** 2×2 table of {depth-init, random-init} × {with depth-reg,
+  without depth-reg}, on the same 6 scenes for 2000 iters each. Existing
+  pipeline supports this via the `--depth-reg` flag; needs ~$0.50 of GPU
+  time and ~2 hours to run and aggregate.
+
+- **Update H1 Table 2 row for PSNR=25.** Change from "0 of 6 scenes
+  reach" to "1 of 6 (test_4 at ~iter 1100)." Already identified by the
+  new wall-clock profile; just needs the LaTeX edit.
+
+- **Per-stage timing breakdown** (forward / backward / loss / optimizer /
+  densify). The current JSONL logger doesn't record per-stage timings.
+  Filling this in requires re-instrumenting `train_loop.py` and rerunning
+  one representative scene. Marginal value vs the cost of another GPU
+  session — the wall-clock table already captures the systems story.
+  Will be acknowledged as a limitation in the report.
+
+- **Per-iter GPU memory.** Same situation as per-stage timing. The
+  ~3–4 GB peak claim in the report is from `nvidia-smi` observation
+  during the convergence study, not from per-iter logging. Acknowledged
+  as a limitation.
+
+### Writeup polish
+- Figure caption tightening.
+- Finish writing the report.
